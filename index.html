@@ -141,6 +141,8 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .kcard h3{font-size:22px;display:flex;justify-content:space-between;align-items:baseline}
 .kit{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #efeae3}
 .kit.listo{opacity:.55}
+.kcols{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}.kcol{display:flex;flex-direction:column;gap:12px}.kcard.ok{border-top-color:#16a34a}
+@media(max-width:800px){.kcols{grid-template-columns:1fr}}
 .bars{display:flex;align-items:flex-end;gap:6px;height:150px;border-bottom:2px solid var(--line);padding-top:10px}
 .bars div{flex:1;background:var(--acc);border-radius:4px 4px 0 0;min-height:2px;position:relative}
 .bars span{position:absolute;bottom:-20px;left:0;right:0;text-align:center;font-size:10px;color:var(--mut)}
@@ -594,10 +596,20 @@ R.cocina=async function(){
   if(COC.seen===null)COC.seen=new Set(rows.map(r=>r.id));
   else{const nuevos=rows.filter(r=>r.estado==='en_cocina'&&!COC.seen.has(r.id));rows.forEach(r=>COC.seen.add(r.id));
     if(nuevos.length){if(COC.sound)cocBeep();if(COC.print)imprimirCocina(nuevos)}}
-  const g={};rows.forEach(r=>{(g[r.comanda_id]=g[r.comanda_id]||{h:r,items:[]}).items.push(r)});
-  const ks=Object.values(g);
-  main('<div class="brow"><button class="btn '+(COC.sound?'g':'l')+' sm" id="cso">'+(COC.sound?'🔔 Sonido: activado':'🔕 Sonido: apagado')+'</button><button class="btn '+(COC.print?'g':'l')+' sm" id="cpr">'+(COC.print?'🖨️ Imprimir pedidos nuevos: activado':'🖨️ Imprimir pedidos nuevos: apagado')+'</button><span class="hint">Avisan solos cuando entra un pedido nuevo.</span></div>'+ayuda('Pantalla de cocina','<ul><li>Acá aparece todo lo que el mozo mandó a cocina, del más viejo al más nuevo.</li><li>Cuando el plato está pronto, tocá <b>Listo</b>: la mesa se pinta de azul para avisar al mozo.</li><li>Se actualiza sola cada 10 segundos. Con los botones de arriba podés activar un <b>sonido</b> y la <b>impresión automática</b> cuando entra un pedido nuevo.</li></ul>')+
-  (ks.length?'<div class="kgrid">'+ks.map(k=>{const min=Math.round((Date.now()-new Date(k.h.enviado_at))/60000);return '<div class="kcard'+(min>20?' old':'')+'"><h3><span>'+(k.h.mesa_numero?'Mesa '+k.h.mesa_numero:MODOS[k.h.modo])+(k.h.cliente_nombre?' · '+esc(k.h.cliente_nombre):'')+(k.h.comanda_estado==='cerrada'?' <span class="badge b-ok">💵 Cobrado</span>':'')+'</span><small class="hint">#'+k.h.comanda_numero+' · hace '+min+' min</small></h3>'+k.items.map(i=>'<div class="kit '+i.estado+'"><div><b>'+fnum(i.cantidad,0)+' ×</b> '+esc(i.descripcion)+(i.llevar?' 📦':'')+(i.notas?'<br><b style="color:#b91c1c">📝 '+esc(i.notas)+'</b>':'')+'</div>'+(i.estado==='en_cocina'?'<button class="btn g sm" data-l="'+i.id+'">Listo</button>':'<span class="badge b-info">Listo</span>')+'</div>').join('')+'</div>'}).join('')+'</div>':'<div class="panel vacio">No hay pedidos en cocina 👌</div>'));
+  const puedeEnt=puede('admin','cajero','mozo');
+  const col=est=>{const g={};rows.filter(r=>r.estado===est).forEach(r=>{(g[r.comanda_id]=g[r.comanda_id]||{h:r,items:[]}).items.push(r)});return Object.values(g)};
+  const prep=col('en_cocina'),listo=col('listo');
+  const tarjeta=(k,tipo)=>{const min=Math.round((Date.now()-new Date(k.h.enviado_at))/60000),cob=k.h.comanda_estado==='cerrada';
+    return '<div class="kcard'+(tipo==='prep'&&min>20?' old':'')+(tipo==='listo'?' ok':'')+'"><h3><span>'+(k.h.mesa_numero?'Mesa '+k.h.mesa_numero:MODOS[k.h.modo])+(k.h.cliente_nombre?' · '+esc(k.h.cliente_nombre):'')+'</span><small class="hint">#'+k.h.comanda_numero+' · hace '+min+' min</small></h3>'+
+    '<div style="margin:2px 0 6px">'+(cob?'<span class="badge b-ok">💵 Cobrado</span>':'<span class="badge b-warn">Falta cobrar</span>')+'</div>'+
+    k.items.map(i=>'<div class="kit"><div><b>'+fnum(i.cantidad,0)+' ×</b> '+esc(i.descripcion)+(i.llevar?' 📦':'')+(i.notas?'<br><b style="color:#b91c1c">📝 '+esc(i.notas)+'</b>':'')+'</div>'+(tipo==='prep'?'<button class="btn g sm" data-l="'+i.id+'">Listo</button>':'')+'</div>').join('')+
+    (tipo==='listo'&&puedeEnt?'<div class="brow" style="margin-top:8px"><button class="btn g" data-en="'+k.h.comanda_id+'">✔ Entregado</button>'+(cob?'':'<button class="btn l sm" data-ab="'+k.h.comanda_id+'">💵 Abrir / cobrar</button>')+'</div>':'')+'</div>'};
+  main('<div class="brow"><button class="btn '+(COC.sound?'g':'l')+' sm" id="cso">'+(COC.sound?'🔔 Sonido: activado':'🔕 Sonido: apagado')+'</button><button class="btn '+(COC.print?'g':'l')+' sm" id="cpr">'+(COC.print?'🖨️ Imprimir pedidos nuevos: activado':'🖨️ Imprimir pedidos nuevos: apagado')+'</button><span class="hint">Avisan solos cuando entra un pedido nuevo.</span></div>'+
+  ayuda('Pantalla de cocina','<ul><li><b>🔥 En preparación</b>: lo que el mozo o el cajero mandó a cocina, del más viejo al más nuevo. Cuando el plato está pronto, el cocinero toca <b>Listo</b> y pasa a la otra columna.</li><li><b>✅ Para retirar</b>: platos listos. El cajero o el mozo los entrega y toca <b>Entregado</b>; ahí desaparecen. Cada pedido dice si ya está cobrado o falta cobrar.</li><li>Se actualiza sola cada 10 segundos. Con los botones de arriba podés activar un <b>sonido</b> y la <b>impresión automática</b> cuando entra un pedido nuevo.</li></ul>')+
+  '<div class="kcols"><div class="kcol"><div class="ptit">🔥 En preparación <span class="badge b-warn">'+prep.length+'</span></div>'+(prep.length?prep.map(k=>tarjeta(k,'prep')).join(''):'<div class="panel vacio">No hay nada en preparación 👌</div>')+'</div>'+
+  '<div class="kcol"><div class="ptit">✅ Para retirar <span class="badge b-info">'+listo.length+'</span></div>'+(listo.length?listo.map(k=>tarjeta(k,'listo')).join(''):'<div class="panel vacio">No hay pedidos listos esperando</div>')+'</div></div>');
+  pagadosBind(()=>R.cocina());
+  document.querySelectorAll('[data-ab]').forEach(b=>b.onclick=()=>go('comanda',b.dataset.ab));
   document.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>busy(b,async()=>{await upd('comanda_items',b.dataset.l,{estado:'listo'});R.cocina()}));
   $('#cso').onclick=()=>{COC.sound=!COC.sound;cocGuardar();if(COC.sound){cocAudio();cocBeep();toast('Sonido activado','ok')}R.cocina()};
   $('#cpr').onclick=()=>{COC.print=!COC.print;cocGuardar();if(COC.print)toast('Se va a abrir el ticket de cada pedido nuevo. Si no aparece, habilitá las ventanas emergentes.','ok');R.cocina()};
