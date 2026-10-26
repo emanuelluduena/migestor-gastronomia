@@ -196,13 +196,13 @@ function esp(m){
   if(/failed to fetch|networkerror|load failed|network request/.test(l))return 'No hay conexión con el servidor. Revisá tu internet y probá de nuevo.';
   if(/duplicate key|already exists|unique/.test(l))return 'Ya existe un registro con ese dato (por ejemplo, un número repetido).';
   if(/foreign key/.test(l))return 'No se puede hacer: ese dato se está usando en otro lado.';
-  if(/null value|not-null|violates not-null/.test(l))return 'Falta completar un dato obligatorio.';
+  if(/null value|not-null/.test(l))return 'Falta completar un dato obligatorio.';
   if(/check constraint/.test(l))return 'Hay un dato con un valor que no es válido. Revisalo.';
   if(/row-level security|permission denied|not authorized|forbidden/.test(l))return 'No tenés permiso para hacer esto.';
   if(/jwt|token/.test(l)&&/expired|invalid/.test(l))return 'Tu sesión venció. Volvé a ingresar.';
-  if(/cannot read|undefined|is not a function|is not defined|null|syntaxerror|typeerror|referenceerror|unexpected token/.test(l))return 'Ocurrió un error inesperado. Probá de nuevo y, si sigue pasando, avisanos.';
+  if(/cannot read|undefined|is not a function|is not defined|syntaxerror|typeerror|referenceerror|unexpected token/.test(l))return 'Ocurrió un error inesperado. Probá de nuevo y, si sigue pasando, avisanos.';
   if(/[áéíóúñ¿¡]/i.test(m)||/^(poné|falta|elegí|cargá|completá|agregá|no |ya |este |tu |hay |primero)/i.test(m))return m;
-  if(/^[ -]*$/.test(m)&&/(the|error|failed|invalid|not found|must|cannot|could not|unable)/.test(l))return 'Ocurrió un error. Probá de nuevo y, si sigue pasando, avisanos.';
+  if(/\b(the|error|failed|invalid|not found|must|cannot|could not|unable)\b/.test(l))return 'Ocurrió un error. Probá de nuevo y, si sigue pasando, avisanos.';
   return m}
 function toast(m,t){const e=document.createElement('div');e.className='toast '+(t||'');e.textContent=t==='err'?esp(m):m;$('#toast-root').appendChild(e);setTimeout(()=>e.remove(),t==='err'?5000:2600)}
 function modal(html,o={}){const ov=document.createElement('div');ov.className='moverlay';ov.innerHTML='<div class="modal'+(o.wide?' wide':'')+'"><button class="mx" type="button" aria-label="Cerrar">×</button>'+html+'</div>';const close=()=>{ov.remove()};ov.querySelector('.mx').onclick=close;ov.addEventListener('mousedown',e=>{if(e.target===ov&&!o.sticky)close()});$('#modal-root').appendChild(ov);ov.close=close;return ov}
