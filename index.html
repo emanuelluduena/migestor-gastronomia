@@ -191,7 +191,20 @@ const num=v=>{const n=parseFloat(String(v??'').replace(',','.'));return isNaN(n)
 const MODOS={salon:'🍽️ Comer acá',mostrador:'🏪 Mostrador',llevar:'🥡 Retira el cliente',delivery:'🛵 Delivery'};
 const MEDIOS={efectivo:'Efectivo',transferencia:'Transferencia',debito:'Débito',credito:'Crédito',qr:'QR'};
 const UNID={g:'g',kg:'kg',ml:'ml',l:'l',u:'u',feta:'fetas',unidad:'u'};
-function toast(m,t){const e=document.createElement('div');e.className='toast '+(t||'');e.textContent=m;$('#toast-root').appendChild(e);setTimeout(()=>e.remove(),t==='err'?5000:2600)}
+function esp(m){
+  m=String(m||'');const l=m.toLowerCase();
+  if(/failed to fetch|networkerror|load failed|network request/.test(l))return 'No hay conexión con el servidor. Revisá tu internet y probá de nuevo.';
+  if(/duplicate key|already exists|unique/.test(l))return 'Ya existe un registro con ese dato (por ejemplo, un número repetido).';
+  if(/foreign key/.test(l))return 'No se puede hacer: ese dato se está usando en otro lado.';
+  if(/null value|not-null|violates not-null/.test(l))return 'Falta completar un dato obligatorio.';
+  if(/check constraint/.test(l))return 'Hay un dato con un valor que no es válido. Revisalo.';
+  if(/row-level security|permission denied|not authorized|forbidden/.test(l))return 'No tenés permiso para hacer esto.';
+  if(/jwt|token/.test(l)&&/expired|invalid/.test(l))return 'Tu sesión venció. Volvé a ingresar.';
+  if(/cannot read|undefined|is not a function|is not defined|null|syntaxerror|typeerror|referenceerror|unexpected token/.test(l))return 'Ocurrió un error inesperado. Probá de nuevo y, si sigue pasando, avisanos.';
+  if(/[áéíóúñ¿¡]/i.test(m)||/^(poné|falta|elegí|cargá|completá|agregá|no |ya |este |tu |hay |primero)/i.test(m))return m;
+  if(/^[ -]*$/.test(m)&&/(the|error|failed|invalid|not found|must|cannot|could not|unable)/.test(l))return 'Ocurrió un error. Probá de nuevo y, si sigue pasando, avisanos.';
+  return m}
+function toast(m,t){const e=document.createElement('div');e.className='toast '+(t||'');e.textContent=t==='err'?esp(m):m;$('#toast-root').appendChild(e);setTimeout(()=>e.remove(),t==='err'?5000:2600)}
 function modal(html,o={}){const ov=document.createElement('div');ov.className='moverlay';ov.innerHTML='<div class="modal'+(o.wide?' wide':'')+'"><button class="mx" type="button" aria-label="Cerrar">×</button>'+html+'</div>';const close=()=>{ov.remove()};ov.querySelector('.mx').onclick=close;ov.addEventListener('mousedown',e=>{if(e.target===ov&&!o.sticky)close()});$('#modal-root').appendChild(ov);ov.close=close;return ov}
 function ask(msg,ok='Confirmar',danger){return new Promise(res=>{const m=modal('<h2>'+esc(msg)+'</h2><div class="mfoot"><button class="btn l" data-n>Cancelar</button><button class="btn '+(danger?'r':'o')+'" data-y>'+esc(ok)+'</button></div>');m.querySelector('[data-n]').onclick=()=>{m.close();res(false)};m.querySelector('.mx').onclick=()=>{m.close();res(false)};m.querySelector('[data-y]').onclick=()=>{m.close();res(true)}})}
 async function busy(btn,fn){if(btn)btn.disabled=true;try{return await fn()}catch(e){toast(e.message||'Error','err')}finally{if(btn)btn.disabled=false}}
@@ -201,7 +214,7 @@ async function api(method,path,body,prefer){
   const r=await fetch(SB+'/rest/v1/'+path,{method,headers:h,body:body!==undefined?JSON.stringify(body):undefined});
   const t=await r.text();let d=null;try{d=t?JSON.parse(t):null}catch(e){}
   if(!r.ok){if(r.status===401){toast('Tu sesión venció. Volvé a ingresar.','err');setTimeout(()=>logout(true),800)}
-    throw new Error((d&&(d.message||d.hint))||'Error '+r.status)}
+    throw new Error(esp((d&&(d.message||d.hint))||'Error '+r.status))}
   return d}
 const get=p=>api('GET',p);
 const ins=(t,row)=>api('POST',t,Array.isArray(row)?row.map(x=>({negocio_id:S.negocio.id,...x})):{negocio_id:S.negocio.id,...row},'return=representation');
@@ -303,7 +316,7 @@ function go(m,arg){
   stopTimer();CUR=m;
   document.querySelectorAll('#nav .tab').forEach(b=>b.classList.toggle('act',b.dataset.m===m));
   window.scrollTo(0,0);main('<div class="vacio">Cargando…</div>');
-  Promise.resolve(R[m](arg)).catch(e=>{main('<div class="alert a-bad">'+esc(e.message)+'</div>')})}
+  Promise.resolve(R[m](arg)).catch(e=>{main('<div class="alert a-bad">'+esc(esp(e.message))+'</div>')})}
 
 /* ---------- RESUMEN ---------- */
 let RES_D={desde:'',hasta:''};
@@ -427,9 +440,9 @@ R.comanda=async function(id){
   (abierta?'<div class="brow" style="margin-top:12px"><button class="btn y" id="ce"'+(items.some(i=>i.estado==='pendiente')?'':' disabled')+'>🍳 Enviar a cocina</button>'+(puede('admin','cajero')?'<button class="btn g" id="cc"'+(sub>0?'':' disabled')+'>💵 Cobrar</button>':'')+(c.mesa_id?'<button class="btn l sm" id="cm">Mover de mesa</button>':'')+'<button class="btn l sm" id="cp">🖨️</button><button class="btn r sm" id="ca">Anular</button></div>':'')+'</div></div>');
   const re=()=>R.comanda(id);
   $('#cv').onclick=()=>go('salon');
-  document.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{CM.cat=b.dataset.k;re()});
+  $('#main').querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{CM.cat=b.dataset.k;re()});
   const q=$('#cq');if(q)q.oninput=e=>{CM.q=e.target.value;clearTimeout(q._t);q._t=setTimeout(()=>{re().then(()=>{const n=$('#cq');if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length)}})},350)};
-  document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>busy(null,async()=>{
+  $('#main').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>busy(null,async()=>{
     const p=cat.prods.find(x=>x.id===b.dataset.p);if(!p.disponible)return toast('Producto no disponible','err');
     const llevar=c.modo==='llevar'||c.modo==='delivery';
     const ex=items.find(i=>i.producto_id===p.id&&i.estado==='pendiente'&&!i.notas&&!!i.llevar===llevar);
@@ -437,10 +450,10 @@ R.comanda=async function(id){
     else await ins('comanda_items',{comanda_id:id,producto_id:p.id,cantidad:1,llevar});
     re()}));
   const byId=x=>items.find(i=>i.id===x);
-  document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>busy(null,async()=>{const i=byId(b.dataset.a);await upd('comanda_items',i.id,{cantidad:Number(i.cantidad)+1});re()}));
-  document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>busy(null,async()=>{const i=byId(b.dataset.m);if(i.cantidad>1)await upd('comanda_items',i.id,{cantidad:Number(i.cantidad)-1});else await del('comanda_items',i.id);re()}));
-  document.querySelectorAll('[data-ll]').forEach(b=>b.onclick=()=>busy(null,async()=>{const i=byId(b.dataset.ll);await upd('comanda_items',i.id,{llevar:!i.llevar});re()}));
-  document.querySelectorAll('[data-n]').forEach(b=>b.onclick=async()=>{const i=byId(b.dataset.n);
+  $('#main').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>busy(null,async()=>{const i=byId(b.dataset.a);await upd('comanda_items',i.id,{cantidad:Number(i.cantidad)+1});re()}));
+  $('#main').querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>busy(null,async()=>{const i=byId(b.dataset.m);if(i.cantidad>1)await upd('comanda_items',i.id,{cantidad:Number(i.cantidad)-1});else await del('comanda_items',i.id);re()}));
+  $('#main').querySelectorAll('[data-ll]').forEach(b=>b.onclick=()=>busy(null,async()=>{const i=byId(b.dataset.ll);await upd('comanda_items',i.id,{llevar:!i.llevar});re()}));
+  $('#main').querySelectorAll('[data-n]').forEach(b=>b.onclick=async()=>{const i=byId(b.dataset.n);
     let ings=[];try{if(i.producto_id){const r=await get('receta_items?select=aplica,insumos(nombre,tipo)&producto_id=eq.'+i.producto_id);const seen={};r.forEach(x=>{const n=x.insumos&&x.insumos.tipo==='ingrediente'?x.insumos.nombre:null;if(n&&!seen[n]){seen[n]=1;ings.push(n)}})}}catch(e){}
     let toks=(i.notas||'').split(',').map(t=>t.trim()).filter(Boolean);
     const mo=modal('<h2>'+esc(i.descripcion)+'</h2><div class="hint" style="margin-bottom:6px">SIN (tocá lo que NO lleva)</div><div class="chips" id="sn">'+(ings.map(n=>'<button type="button" class="chip" data-s="'+esc(n)+'">Sin '+esc(n.toLowerCase())+'</button>').join('')||'<span class="hint">Este producto no tiene receta cargada.</span>')+'</div><div class="hint" style="margin-bottom:6px">CON (extras o agregados)</div><div class="brow"><input id="cx" placeholder="Ej: extra queso" style="flex:1"><button type="button" class="btn l sm" id="cxa">+ Agregar</button></div><div class="fg"><label>Nota para cocina</label><textarea id="nt" placeholder="Ej: bien cocido">'+esc(toks.join(', '))+'</textarea></div><div class="mfoot"><button class="btn o" id="ok">Guardar</button></div>');
@@ -450,8 +463,8 @@ R.comanda=async function(id){
     $('#cxa',mo).onclick=()=>{const v=$('#cx',mo).value.trim();if(!v)return;const a=rd();a.push('CON '+v);ta.value=a.join(', ');$('#cx',mo).value='';pintar()};
     ta.oninput=pintar;pintar();
     $('#ok',mo).onclick=e=>busy(e.target,async()=>{await upd('comanda_items',i.id,{notas:ta.value.trim()||null});mo.close();re()})});
-  document.querySelectorAll('[data-sv]').forEach(b=>b.onclick=()=>busy(b,async()=>{await upd('comanda_items',b.dataset.sv,{estado:'servido'});re()}));
-  document.querySelectorAll('[data-x]').forEach(b=>b.onclick=async()=>{const i=byId(b.dataset.x);if(!await ask('¿Sacar "'+i.descripcion+'"?','Sacar',true))return;busy(null,async()=>{if(i.estado==='pendiente')await del('comanda_items',i.id);else await upd('comanda_items',i.id,{estado:'anulado'});re()})});
+  $('#main').querySelectorAll('[data-sv]').forEach(b=>b.onclick=()=>busy(b,async()=>{await upd('comanda_items',b.dataset.sv,{estado:'servido'});re()}));
+  $('#main').querySelectorAll('[data-x]').forEach(b=>b.onclick=async()=>{const i=byId(b.dataset.x);if(!await ask('¿Sacar "'+i.descripcion+'"?','Sacar',true))return;busy(null,async()=>{if(i.estado==='pendiente')await del('comanda_items',i.id);else await upd('comanda_items',i.id,{estado:'anulado'});re()})});
   if(abierta){
     $('#ce').onclick=e=>busy(e.target,async()=>{await rpc('enviar_a_cocina',{p_comanda:id});toast('Enviado a cocina','ok');re()});
     if($('#cc'))$('#cc').onclick=()=>cobrarModal(c,sub,re);
@@ -465,19 +478,25 @@ async function moverModal(c,re){
   const mo=modal('<h2>Mover a otra mesa</h2>'+(libres.length?'<div class="chips">'+libres.map(m=>'<button class="chip" data-t="'+m.id+'">Mesa '+m.numero+'</button>').join('')+'</div>':'<div class="vacio">No hay mesas libres</div>'));
   mo.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>busy(b,async()=>{await rpc('mover_comanda',{p_comanda:c.id,p_mesa:b.dataset.t});mo.close();re()}))}
 function cobrarModal(c,sub,re){
-  const mo=modal('<h2>Cobrar · '+money(sub)+'</h2><div class="fgrid"><div class="fg"><label>Descuento %</label><input id="dp" type="number" min="0" max="100" value="0" inputmode="decimal"></div><div class="fg"><label>Propina $</label><input id="pr" type="number" min="0" value="0" inputmode="decimal"></div></div><div id="pgs"></div><button class="btn l sm" id="apg">+ Otro medio de pago</button><div class="trow" style="margin-top:12px"><span>Total a cobrar</span><b id="tt" style="font-size:22px"></b></div><div class="trow"><span>Falta cargar</span><b id="fl"></b></div><div class="mfoot"><button class="btn g big" id="ok">Confirmar cobro</button></div>');
+  const ICO={efectivo:'💵',transferencia:'🏦',debito:'💳',credito:'💳',qr:'📱'};
+  const mo=modal('<h2>Cobrar · '+money(sub)+'</h2><div class="fgrid"><div class="fg"><label>Descuento %</label><input id="dp" type="number" min="0" max="100" value="0" inputmode="decimal"></div><div class="fg"><label>Propina $</label><input id="pr" type="number" min="0" value="0" inputmode="decimal"></div></div><div class="hint" style="margin:6px 0">¿Cómo paga? Tocá un medio. Si paga con varios (ej: parte efectivo y parte transferencia), tocá los que use y cargá cuánto va en cada uno.</div><div class="chips" id="mp"></div><div id="pgs"></div><div class="trow" style="margin-top:12px"><span>Total a cobrar</span><b id="tt" style="font-size:22px"></b></div><div class="trow"><span id="fll">Falta cargar</span><b id="fl"></b></div><div class="mfoot"><button class="btn g big" id="ok">Confirmar cobro</button></div>');
   const tot=()=>Math.round((sub-sub*Math.min(100,Math.max(0,num($('#dp',mo).value)))/100+Math.max(0,num($('#pr',mo).value)))*100)/100;
   let pgs=[{medio:'efectivo',monto:''}];
-  const draw=()=>{$('#pgs',mo).innerHTML=pgs.map((p,i)=>'<div class="brow"><select data-i="'+i+'" class="pm" style="width:150px">'+Object.keys(MEDIOS).map(k=>'<option value="'+k+'"'+(p.medio===k?' selected':'')+'>'+MEDIOS[k]+'</option>').join('')+'</select><input class="pv" data-i="'+i+'" type="number" inputmode="decimal" value="'+p.monto+'" placeholder="Monto" style="width:140px"><button class="btn sm l" data-r="'+i+'">Todo el resto</button>'+(pgs.length>1?'<button class="btn sm l" data-d="'+i+'">✕</button>':'')+'</div>').join('');
-    mo.querySelectorAll('.pm').forEach(s=>s.onchange=()=>{pgs[s.dataset.i].medio=s.value});
+  const falta=()=>Math.round((tot()-pgs.reduce((a,p)=>a+num(p.monto),0))*100)/100;
+  const calc=()=>{const t=tot();$('#tt',mo).textContent=money(t);const f=falta();$('#fll',mo).textContent=f<-0.5?'Sobra':'Falta cargar';$('#fl',mo).textContent=money(Math.abs(f));$('#fl',mo).className=Math.abs(f)<0.5?'pos':'neg2'};
+  const draw=()=>{
+    $('#mp',mo).innerHTML=Object.keys(MEDIOS).map(k=>'<button type="button" class="chip'+(pgs.some(p=>p.medio===k)?' act':'')+'" data-k="'+k+'" style="font-size:15px;padding:9px 16px">'+ICO[k]+' '+MEDIOS[k]+'</button>').join('');
+    $('#pgs',mo).innerHTML=pgs.length>1?pgs.map((p,i)=>'<div class="brow"><b style="width:140px">'+ICO[p.medio]+' '+MEDIOS[p.medio]+'</b><input class="pv" data-i="'+i+'" type="number" inputmode="decimal" value="'+p.monto+'" placeholder="Monto" style="width:140px"><button type="button" class="btn sm l" data-r="'+i+'">Todo el resto</button></div>').join(''):'';
+    mo.querySelectorAll('#mp [data-k]').forEach(b=>b.onclick=()=>{const k=b.dataset.k,i=pgs.findIndex(p=>p.medio===k);
+      if(i>=0){if(pgs.length===1)return;pgs.splice(i,1);if(pgs.length===1)pgs[0].monto=tot()}
+      else{if(pgs.length===1)pgs[0].monto=pgs[0].monto===''||num(pgs[0].monto)>=tot()-0.5?Math.round(tot()/2*100)/100:pgs[0].monto;pgs.push({medio:k,monto:Math.max(0,falta())})}
+      draw();calc()});
     mo.querySelectorAll('.pv').forEach(s=>s.oninput=()=>{pgs[s.dataset.i].monto=s.value;calc()});
-    mo.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{const i=+b.dataset.r;const otros=pgs.reduce((a,p,j)=>j===i?a:a+num(p.monto),0);pgs[i].monto=Math.max(0,Math.round((tot()-otros)*100)/100);draw();calc()});
-    mo.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{pgs.splice(+b.dataset.d,1);draw();calc()})};
-  const calc=()=>{const t=tot();$('#tt',mo).textContent=money(t);const f=t-pgs.reduce((a,p)=>a+num(p.monto),0);$('#fl',mo).textContent=money(f);$('#fl',mo).className=Math.abs(f)<0.5?'pos':'neg2'};
+    mo.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{const i=+b.dataset.r;const otros=pgs.reduce((a,p,j)=>j===i?a:a+num(p.monto),0);pgs[i].monto=Math.max(0,Math.round((tot()-otros)*100)/100);draw();calc()})};
   ['dp','pr'].forEach(k=>$('#'+k,mo).oninput=()=>{if(pgs.length===1)pgs[0].monto=tot();draw();calc()});
-  $('#apg',mo).onclick=()=>{pgs.push({medio:'transferencia',monto:''});draw()};
   pgs[0].monto=tot();draw();calc();
   $('#ok',mo).onclick=e=>busy(e.target,async()=>{
+    if(Math.abs(falta())>=0.5)throw new Error(falta()>0?'Falta cargar '+money(falta())+' para completar el pago.':'Los montos superan el total en '+money(-falta())+'.');
     const r=await rpc('cobrar_comanda',{p_comanda:c.id,p_pagos:pgs.filter(p=>num(p.monto)>0).map(p=>({medio:p.medio,monto:num(p.monto)})),p_descuento_pct:num($('#dp',mo).value),p_propina:num($('#pr',mo).value)});
     mo.close();toast('Cobrado ✔ '+money(r.total),'ok');
     if(r.stock_bajo&&r.stock_bajo.length)setTimeout(()=>toast('Stock bajo: '+r.stock_bajo.join(', ')),1500);
