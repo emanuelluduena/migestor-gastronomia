@@ -481,7 +481,7 @@ async function moverModal(c,re){
   const libres=ms.filter(m=>!m.comanda_id);
   const mo=modal('<h2>Mover a otra mesa</h2>'+(libres.length?'<div class="chips">'+libres.map(m=>'<button class="chip" data-t="'+m.id+'">Mesa '+m.numero+'</button>').join('')+'</div>':'<div class="vacio">No hay mesas libres</div>'));
   mo.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>busy(b,async()=>{await rpc('mover_comanda',{p_comanda:c.id,p_mesa:b.dataset.t});mo.close();re()}))}
-function cobrarModal(c,sub,re){
+function cobrarModal(c,sub,re,fin){
   const ICO={efectivo:'💵',transferencia:'🏦',debito:'💳',credito:'💳',qr:'📱'};
   const mo=modal('<h2>Cobrar · '+money(sub)+'</h2><div class="fgrid"><div class="fg"><label>Descuento %</label><input id="dp" type="number" min="0" max="100" value="0" inputmode="decimal"></div><div class="fg"><label>Propina $</label><input id="pr" type="number" min="0" value="0" inputmode="decimal"></div></div><div class="hint" style="margin:6px 0">¿Cómo paga? Tocá un medio. Si paga con varios (ej: parte efectivo y parte transferencia), tocá los que use y cargá cuánto va en cada uno.</div><div class="chips" id="mp"></div><div id="pgs"></div><div class="trow" style="margin-top:12px"><span>Total a cobrar</span><b id="tt" style="font-size:22px"></b></div><div class="trow"><span id="fll">Falta cargar</span><b id="fl"></b></div><div class="mfoot"><button class="btn g big" id="ok">Confirmar cobro</button></div>');
   const tot=()=>Math.round((sub-sub*Math.min(100,Math.max(0,num($('#dp',mo).value)))/100+Math.max(0,num($('#pr',mo).value)))*100)/100;
@@ -504,7 +504,7 @@ function cobrarModal(c,sub,re){
     const r=await rpc('cobrar_comanda',{p_comanda:c.id,p_pagos:pgs.filter(p=>num(p.monto)>0).map(p=>({medio:p.medio,monto:num(p.monto)})),p_descuento_pct:num($('#dp',mo).value),p_propina:num($('#pr',mo).value)});
     mo.close();toast('Cobrado ✔ '+money(r.total),'ok');
     if(r.stock_bajo&&r.stock_bajo.length)setTimeout(()=>toast('Stock bajo: '+r.stock_bajo.join(', ')),1500);
-    go('salon')})}
+    if(fin)fin();else go('salon')})}
 function ventana(titulo,cuerpo){
   const w=window.open('','_blank','width=420,height=640');if(!w){toast('Habilitá las ventanas emergentes para imprimir','err');return}
   w.document.write('<html><head><title>'+esc(titulo)+'</title><style>body{font-family:monospace;font-size:13px;padding:10px;max-width:320px}h2{text-align:center;margin:4px 0}table{width:100%}td.r{text-align:right}hr{border:0;border-top:1px dashed #000}</style></head><body>'+cuerpo+'<script>window.print()<\/script></body></html>');w.document.close()}
@@ -748,9 +748,9 @@ async function ventaNueva(){
   const draw=()=>{
     const prods=cat.prods.filter(p=>(!VC.cat||p.categoria_id===VC.cat)&&(!VC.q||p.nombre.toLowerCase().includes(VC.q.toLowerCase())));
     const tot=VC.items.reduce((a,i)=>a+i.cantidad*i.precio,0);
-    main(ventasTabs()+ayuda('Cómo se hace una venta','<ol><li>Tocá los <b>productos</b> que pide el cliente. Con <b>📝 Con/Sin</b> indicás lo que no lleva (sin tomate…) o los extras.</li><li>Al final tocá <b>Continuar</b> y elegí cómo es el pedido: <b>Comer acá</b> (mesa), <b>Mostrador</b>, <b>Retira el cliente</b> o <b>Delivery</b>.</li><li>Después lo mandás a cocina y cobrás, eligiendo el medio de pago.</li></ol>')+
+    main(ventasTabs()+ayuda('Cómo se hace una venta','<ol><li>Tocá los <b>productos</b> que pide el cliente. Con <b>📝 Con/Sin</b> indicás lo que no lleva (sin tomate…) o los extras.</li><li>Tocá <b>Enviar a cocina</b> o <b>Cobrar</b>. Se abre una ventana para elegir cómo es el pedido: <b>Comer acá</b> (mesa), <b>Mostrador</b>, <b>Retira el cliente</b> o <b>Delivery</b>.</li><li>En el último paso decidís si <b>cobrás ahora</b> (elegís el medio de pago) o <b>después</b> (queda abierto en el Salón).</li></ol>')+
     '<div class="cmd"><div><div class="chips"><button class="chip'+(!VC.cat?' act':'')+'" data-vk="">Todos</button>'+cat.cats.map(k=>'<button class="chip'+(VC.cat===k.id?' act':'')+'" data-vk="'+k.id+'">'+esc(k.nombre)+'</button>').join('')+'</div><div class="srch" style="margin-bottom:10px;max-width:none"><span>🔍</span><input id="vq" placeholder="Buscar producto" value="'+esc(VC.q)+'"></div><div class="pgrid">'+(prods.map(p=>'<button class="prod'+(p.disponible?'':' off')+'" data-vp="'+p.id+'"><span class="pn">'+esc(p.nombre)+'</span><span class="pp">'+money(p.precio)+'</span>'+(p.disponible?'':'<span class="hint">No disponible</span>')+'</button>').join('')||'<div class="vacio">Sin productos</div>')+'</div></div>'+
-    '<div class="ticket"><div class="ptit" style="font-size:20px">Pedido</div><div class="citems">'+(VC.items.map((i,k)=>'<div class="cit"><div class="nm">'+fnum(i.cantidad,0)+' × '+esc(i.nombre)+'</div><div class="n">'+money(i.cantidad*i.precio)+'</div><div class="ctl"><button class="btn sm l" data-vm="'+k+'">−</button><button class="btn sm l" data-va="'+k+'">+</button><button class="btn sm l" data-vn="'+k+'">📝 Con/Sin</button><button class="btn sm l" data-vx="'+k+'">✕</button>'+(i.notas?'<span class="hint" style="color:#b91c1c;font-weight:700">'+esc(i.notas)+'</span>':'')+'</div></div>').join('')||'<div class="vacio">Tocá los productos para armar el pedido</div>')+'</div><div class="ttl"><span>Total</span><span>'+money(tot)+'</span></div><div class="brow" style="margin-top:12px"><button class="btn g big" id="vc"'+(VC.items.length?'':' disabled')+'>Continuar →</button>'+(VC.items.length?'<button class="btn l sm" id="vv">Vaciar</button>':'')+'</div></div></div>');
+    '<div class="ticket"><div class="ptit" style="font-size:20px">Pedido</div><div class="citems">'+(VC.items.map((i,k)=>'<div class="cit"><div class="nm">'+fnum(i.cantidad,0)+' × '+esc(i.nombre)+'</div><div class="n">'+money(i.cantidad*i.precio)+'</div><div class="ctl"><button class="btn sm l" data-vm="'+k+'">−</button><button class="btn sm l" data-va="'+k+'">+</button><button class="btn sm l" data-vn="'+k+'">📝 Con/Sin</button><button class="btn sm l" data-vx="'+k+'">✕</button>'+(i.notas?'<span class="hint" style="color:#b91c1c;font-weight:700">'+esc(i.notas)+'</span>':'')+'</div></div>').join('')||'<div class="vacio">Tocá los productos para armar el pedido</div>')+'</div><div class="ttl"><span>Total</span><span>'+money(tot)+'</span></div><div class="brow" style="margin-top:12px"><button class="btn y big" id="vk"'+(VC.items.length?'':' disabled')+'>🍳 Enviar a cocina</button><button class="btn g big" id="vc"'+(VC.items.length?'':' disabled')+'>💵 Cobrar</button>'+(VC.items.length?'<button class="btn l sm" id="vv">Vaciar</button>':'')+'</div></div></div>');
     ventasTabsBind();
     const M=$('#main');
     M.querySelectorAll('[data-vk]').forEach(b=>b.onclick=()=>{VC.cat=b.dataset.vk;draw()});
@@ -761,31 +761,40 @@ async function ventaNueva(){
     M.querySelectorAll('[data-vx]').forEach(b=>b.onclick=()=>{VC.items.splice(+b.dataset.vx,1);draw()});
     M.querySelectorAll('[data-vn]').forEach(b=>b.onclick=()=>{const i=VC.items[+b.dataset.vn];notaModal(i.producto_id,i.nombre,i.notas,async v=>{i.notas=v;draw()})});
     if($('#vv'))$('#vv').onclick=()=>{VC.items=[];draw()};
-    if($('#vc'))$('#vc').onclick=()=>finalizarVenta()};
+    if($('#vc'))$('#vc').onclick=()=>finalizarVenta('cobrar');
+    if($('#vk'))$('#vk').onclick=()=>finalizarVenta('cocina')};
   draw()}
-function finalizarVenta(){
+function finalizarVenta(pref){
   let modo=null,mesa=null;
   const tot=VC.items.reduce((a,i)=>a+i.cantidad*i.precio,0);
-  const mo=modal('<h2>¿Cómo es el pedido? · '+money(tot)+'</h2><div class="seg" id="tpb">'+Object.keys(MODOS).map(k=>'<button type="button" data-tp="'+k+'" style="font-size:15px;padding:14px 6px">'+MODOS[k]+'</button>').join('')+'</div><div id="tpf"></div><div class="mfoot"><button class="btn o big" id="ok" disabled>Crear pedido</button></div>');
+  const prim=n=>(pref==='cobrar'?n==='now':n==='later')?'o':'l';
+  const mo=modal('<h2>¿Cómo es el pedido? · '+money(tot)+'</h2><div class="seg" id="tpb">'+Object.keys(MODOS).map(k=>'<button type="button" data-tp="'+k+'" style="font-size:15px;padding:14px 6px">'+MODOS[k]+'</button>').join('')+'</div><div id="tpf"></div><label style="display:flex;gap:8px;align-items:center;margin:14px 0 4px;font-weight:700"><input type="checkbox" id="kc" checked style="width:20px;height:20px"> 🍳 Enviar a cocina (destildalo si no hay nada para preparar, ej: una bebida)</label><div class="hint" style="margin:10px 0 4px">Último paso: ¿cobrás ahora?</div><div class="mfoot"><button class="btn '+prim('later')+' big" id="ok-later" disabled>⏳ Cobrar después</button><button class="btn '+prim('now')+' big" id="ok-now" disabled>💵 Cobrar ahora</button></div>');
+  const hab=v=>{$('#ok-now',mo).disabled=!v;$('#ok-later',mo).disabled=!v};
   mo.querySelectorAll('[data-tp]').forEach(b=>b.onclick=async()=>{modo=b.dataset.tp;mesa=null;
-    mo.querySelectorAll('[data-tp]').forEach(x=>x.classList.toggle('act',x===b));$('#ok',mo).disabled=false;
+    mo.querySelectorAll('[data-tp]').forEach(x=>x.classList.toggle('act',x===b));hab(modo!=='salon');
     const f=$('#tpf',mo);
-    if(modo==='salon'){f.innerHTML='<div class="vacio">Cargando mesas…</div>';$('#ok',mo).disabled=true;
+    if(modo==='salon'){f.innerHTML='<div class="vacio">Cargando mesas…</div>';
       const ms=await get('mesas_estado?select=id,numero,nombre,capacidad,comanda_id&activa=eq.true&order=numero');const libres=ms.filter(m=>!m.comanda_id);
       f.innerHTML='<div class="hint" style="margin:6px 0">Elegí la mesa (solo se ven las libres)</div>'+(libres.length?'<div class="chips" id="mm">'+libres.map(m=>'<button type="button" class="chip" data-m2="'+m.id+'">Mesa '+m.numero+'</button>').join('')+'</div>':'<div class="alert a-warn">No hay mesas libres.</div>')+'<div class="fg" style="max-width:160px"><label>¿Cuántos son?</label><input id="cu" type="number" min="1" value="2" inputmode="numeric"></div>';
-      mo.querySelectorAll('[data-m2]').forEach(c=>c.onclick=()=>{mesa=c.dataset.m2;mo.querySelectorAll('[data-m2]').forEach(x=>x.classList.toggle('act',x===c));$('#ok',mo).disabled=false})}
+      mo.querySelectorAll('[data-m2]').forEach(c=>c.onclick=()=>{mesa=c.dataset.m2;mo.querySelectorAll('[data-m2]').forEach(x=>x.classList.toggle('act',x===c));hab(true)})}
     else f.innerHTML='<div class="fgrid" style="margin-top:8px"><div class="fg"><label>Nombre'+(modo==='mostrador'?' (opcional)':'')+'</label><input id="nn"></div>'+(modo==='delivery'?'<div class="fg"><label>Teléfono</label><input id="nt" inputmode="tel"></div><div class="fg wf"><label>Dirección de entrega</label><input id="nd"></div>':'')+'</div>'});
-  $('#ok',mo).onclick=e=>busy(e.target,async()=>{
+  const crear=async(ahora,btn)=>busy(btn,async()=>{
     if(!modo)throw new Error('Elegí cómo es el pedido');
     let args;
     if(modo==='salon'){if(!mesa)throw new Error('Elegí la mesa');args={p_modo:'salon',p_mesa:mesa,p_cubiertos:parseInt($('#cu',mo).value)||1}}
     else{const nn=$('#nn',mo).value.trim();if(modo==='llevar'&&!nn)throw new Error('Poné el nombre de quien retira');if(modo==='delivery'&&!$('#nd',mo).value.trim())throw new Error('Poné la dirección de entrega');
       args={p_modo:modo,p_cliente_nombre:nn||null,p_telefono:modo==='delivery'?$('#nt',mo).value.trim()||null:null,p_direccion:modo==='delivery'?$('#nd',mo).value.trim()||null:null}}
+    const aCocina=$('#kc',mo).checked;
     const id=await rpc('abrir_comanda',args);
     const llevar=modo==='llevar'||modo==='delivery';
-    try{await ins('comanda_items',VC.items.map(i=>({comanda_id:id,producto_id:i.producto_id,cantidad:i.cantidad,llevar,notas:i.notas||null})))}
+    try{await ins('comanda_items',VC.items.map(i=>({comanda_id:id,producto_id:i.producto_id,cantidad:i.cantidad,llevar,notas:i.notas||null})));
+      if(aCocina)await rpc('enviar_a_cocina',{p_comanda:id})}
     catch(er){try{await rpc('anular_comanda',{p_comanda:id,p_motivo:'Error al cargar los productos'})}catch(x){}throw er}
-    VC.items=[];VC.q='';mo.close();toast('Pedido creado','ok');go('comanda',id)})}
+    VC.items=[];VC.q='';mo.close();
+    if(ahora){toast(aCocina?'Enviado a cocina. Ahora el cobro':'Pedido creado. Ahora el cobro','ok');cobrarModal({id},tot,()=>{},()=>go('ventas'));VT.tab='nueva'}
+    else{toast((aCocina?'Enviado a cocina. ':'')+'Queda abierto para cobrar después (lo ves en el Salón)','ok');go('salon')}});
+  $('#ok-now',mo).onclick=e=>crear(true,e.target);
+  $('#ok-later',mo).onclick=e=>crear(false,e.target)}
 async function ventasHist(){
   if(!VT.desde)VT.desde=VT.hasta=hoy();
   const rows=await get('ventas?select=*&fecha=gte.'+VT.desde+'T00:00:00&fecha=lte.'+VT.hasta+'T23:59:59&order=fecha.desc&limit=300');
