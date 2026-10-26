@@ -508,13 +508,27 @@ function imprimirComanda(c,mesa,items,sub){
   ventana('Comanda','<h2>'+esc(S.negocio.nombre)+'</h2><div style="text-align:center">'+(mesa?'Mesa '+mesa.numero:MODOS[c.modo])+' · #'+c.numero+'<br>'+new Date().toLocaleString('es-AR')+'</div><hr><table>'+items.map(i=>'<tr><td>'+fnum(i.cantidad,0)+' × '+esc(i.descripcion)+(i.notas?'<br>&nbsp;&nbsp;» '+esc(i.notas):'')+'</td><td class="r">'+money(i.subtotal)+'</td></tr>').join('')+'</table><hr><table><tr><td><b>TOTAL</b></td><td class="r"><b>'+money(sub)+'</b></td></tr></table><p style="text-align:center">Ticket no válido como factura</p>')}
 
 /* ---------- COCINA ---------- */
+const COC={seen:null,ac:null,sound:false,print:false};
+try{const z=JSON.parse(localStorage.getItem('mgg_coc')||'{}');COC.sound=!!z.sound;COC.print=!!z.print}catch(e){}
+function cocGuardar(){try{localStorage.setItem('mgg_coc',JSON.stringify({sound:COC.sound,print:COC.print}))}catch(e){}}
+function cocAudio(){try{if(!COC.ac)COC.ac=new (window.AudioContext||window.webkitAudioContext)();if(COC.ac.state==='suspended')COC.ac.resume()}catch(e){}return COC.ac}
+document.addEventListener('click',()=>{if(COC.sound)cocAudio()});
+function cocBeep(){const ac=cocAudio();if(!ac)return;[[880,0],[1175,.28]].forEach(([f,t])=>{const o=ac.createOscillator(),g=ac.createGain();o.type='sine';o.frequency.value=f;o.connect(g);g.connect(ac.destination);const a=ac.currentTime+t;g.gain.setValueAtTime(0.0001,a);g.gain.exponentialRampToValueAtTime(0.5,a+.03);g.gain.exponentialRampToValueAtTime(0.0001,a+.25);o.start(a);o.stop(a+.3)})}
+function imprimirCocina(items){
+  const g={};items.forEach(i=>{(g[i.comanda_id]=g[i.comanda_id]||{h:i,items:[]}).items.push(i)});
+  ventana('Cocina',Object.values(g).map(k=>'<h2>'+(k.h.mesa_numero?'MESA '+k.h.mesa_numero:esc((MODOS[k.h.modo]||k.h.modo).replace(/^\S+\s/,'').toUpperCase()))+'</h2><div style="text-align:center">Pedido #'+k.h.comanda_numero+' · '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})+'</div><hr><table>'+k.items.map(i=>'<tr><td style="font-size:16px"><b>'+fnum(i.cantidad,0)+' ×</b> '+esc(i.descripcion)+(i.llevar?' (PARA LLEVAR)':'')+(i.notas?'<br><b>» '+esc(i.notas)+'</b>':'')+'</td></tr>').join('')+'</table><hr style="margin-bottom:24px">').join(''))}
 R.cocina=async function(){
   const rows=await get('cocina_items?select=*&estado=in.(en_cocina,listo)&order=enviado_at');
+  if(COC.seen===null)COC.seen=new Set(rows.map(r=>r.id));
+  else{const nuevos=rows.filter(r=>r.estado==='en_cocina'&&!COC.seen.has(r.id));rows.forEach(r=>COC.seen.add(r.id));
+    if(nuevos.length){if(COC.sound)cocBeep();if(COC.print)imprimirCocina(nuevos)}}
   const g={};rows.forEach(r=>{(g[r.comanda_id]=g[r.comanda_id]||{h:r,items:[]}).items.push(r)});
   const ks=Object.values(g);
-  main(ayuda('Pantalla de cocina','<ul><li>Acá aparece todo lo que el mozo mandó a cocina, del más viejo al más nuevo.</li><li>Cuando el plato está pronto, tocá <b>Listo</b>: la mesa se pinta de azul para avisar al mozo.</li><li>Se actualiza sola cada 10 segundos.</li></ul>')+
+  main('<div class="brow"><button class="btn '+(COC.sound?'g':'l')+' sm" id="cso">'+(COC.sound?'🔔 Sonido: activado':'🔕 Sonido: apagado')+'</button><button class="btn '+(COC.print?'g':'l')+' sm" id="cpr">'+(COC.print?'🖨️ Imprimir pedidos nuevos: activado':'🖨️ Imprimir pedidos nuevos: apagado')+'</button><span class="hint">Avisan solos cuando entra un pedido nuevo.</span></div>'+ayuda('Pantalla de cocina','<ul><li>Acá aparece todo lo que el mozo mandó a cocina, del más viejo al más nuevo.</li><li>Cuando el plato está pronto, tocá <b>Listo</b>: la mesa se pinta de azul para avisar al mozo.</li><li>Se actualiza sola cada 10 segundos. Con los botones de arriba podés activar un <b>sonido</b> y la <b>impresión automática</b> cuando entra un pedido nuevo.</li></ul>')+
   (ks.length?'<div class="kgrid">'+ks.map(k=>{const min=Math.round((Date.now()-new Date(k.h.enviado_at))/60000);return '<div class="kcard'+(min>20?' old':'')+'"><h3><span>'+(k.h.mesa_numero?'Mesa '+k.h.mesa_numero:MODOS[k.h.modo])+'</span><small class="hint">#'+k.h.comanda_numero+' · hace '+min+' min</small></h3>'+k.items.map(i=>'<div class="kit '+i.estado+'"><div><b>'+fnum(i.cantidad,0)+' ×</b> '+esc(i.descripcion)+(i.llevar?' 📦':'')+(i.notas?'<br><b style="color:#b91c1c">📝 '+esc(i.notas)+'</b>':'')+'</div>'+(i.estado==='en_cocina'?'<button class="btn g sm" data-l="'+i.id+'">Listo</button>':'<span class="badge b-info">Listo</span>')+'</div>').join('')+'</div>'}).join('')+'</div>':'<div class="panel vacio">No hay pedidos en cocina 👌</div>'));
   document.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>busy(b,async()=>{await upd('comanda_items',b.dataset.l,{estado:'listo'});R.cocina()}));
+  $('#cso').onclick=()=>{COC.sound=!COC.sound;cocGuardar();if(COC.sound){cocAudio();cocBeep();toast('Sonido activado','ok')}R.cocina()};
+  $('#cpr').onclick=()=>{COC.print=!COC.print;cocGuardar();if(COC.print)toast('Se va a abrir el ticket de cada pedido nuevo. Si no aparece, habilitá las ventanas emergentes.','ok');R.cocina()};
   auto(()=>{if(CUR==='cocina')R.cocina()},10000)};
 
 /* ---------- CRUD genérico ---------- */
